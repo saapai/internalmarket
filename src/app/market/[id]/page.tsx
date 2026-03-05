@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Card from "@/components/ui/Card";
 import ProbabilityBar from "@/components/ProbabilityBar";
 import BetSlip from "@/components/BetSlip";
-import { calcProbability, formatCurrency, calcMultiplier } from "@/lib/market-math";
+import { calcProbability, formatCurrency, calcCategoryProbabilities, calcCategoryMultiplier } from "@/lib/market-math";
 
 interface Market {
   id: string;
@@ -32,6 +32,7 @@ export default function MarketPage() {
   const { id } = useParams();
   const router = useRouter();
   const [market, setMarket] = useState<Market | null>(null);
+  const [siblingMarkets, setSiblingMarkets] = useState<{ id: string; yes_pool: number; no_pool: number }[]>([]);
   const [bets, setBets] = useState<Bet[]>([]);
   const [userBalance, setUserBalance] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -53,7 +54,15 @@ export default function MarketPage() {
         .limit(20),
     ]);
 
-    if (marketRes.data) setMarket(marketRes.data as unknown as Market);
+    if (marketRes.data) {
+      setMarket(marketRes.data as unknown as Market);
+      // Fetch sibling markets in same category for normalized probabilities
+      const { data: siblings } = await supabase
+        .from("markets")
+        .select("id, yes_pool, no_pool")
+        .eq("category_id", marketRes.data.category_id);
+      if (siblings) setSiblingMarkets(siblings);
+    }
     if (betsRes.data) setBets(betsRes.data as unknown as Bet[]);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -110,8 +119,10 @@ export default function MarketPage() {
     );
   }
 
-  const prob = calcProbability(market.yes_pool, market.no_pool);
+  const categoryProbs = calcCategoryProbabilities(siblingMarkets.length > 0 ? siblingMarkets : [market]);
+  const prob = categoryProbs.get(market.id) ?? calcProbability(market.yes_pool, market.no_pool);
   const totalPool = market.yes_pool + market.no_pool;
+  const anyBets = siblingMarkets.some((m) => m.yes_pool + m.no_pool > 0);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -146,7 +157,7 @@ export default function MarketPage() {
         {/* Left: market info */}
         <div className="md:col-span-2 space-y-4">
           <Card className="p-6">
-            <ProbabilityBar probability={prob} size="lg" />
+            <ProbabilityBar probability={anyBets ? prob : -1} size="lg" />
             <div className="grid grid-cols-3 gap-4 mt-6">
               <div className="text-center">
                 <div className="text-xs text-charcoal/40 mb-1">Total Pool</div>
@@ -155,18 +166,18 @@ export default function MarketPage() {
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-xs text-charcoal/40 mb-1">YES Multiplier</div>
+                <div className="text-xs text-charcoal/40 mb-1">YES Price</div>
                 <div className="font-mono font-bold text-lg text-yes">
-                  {totalPool > 0
-                    ? `${calcMultiplier("YES", market.yes_pool, market.no_pool).toFixed(2)}x`
+                  {anyBets
+                    ? `${Math.round(prob)}¢ (${calcCategoryMultiplier("YES", prob).toFixed(2)}x)`
                     : "—"}
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-xs text-charcoal/40 mb-1">NO Multiplier</div>
+                <div className="text-xs text-charcoal/40 mb-1">NO Price</div>
                 <div className="font-mono font-bold text-lg text-no">
-                  {totalPool > 0
-                    ? `${calcMultiplier("NO", market.yes_pool, market.no_pool).toFixed(2)}x`
+                  {anyBets
+                    ? `${Math.round(100 - prob)}¢ (${calcCategoryMultiplier("NO", prob).toFixed(2)}x)`
                     : "—"}
                 </div>
               </div>
@@ -222,6 +233,7 @@ export default function MarketPage() {
                 market={market}
                 userBalance={userBalance}
                 onBetPlaced={fetchAll}
+                normalizedProb={anyBets ? prob : undefined}
               />
             ) : (
               <div className="text-center py-4">

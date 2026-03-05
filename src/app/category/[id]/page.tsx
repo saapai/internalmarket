@@ -8,7 +8,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import ProbabilityBar from "@/components/ProbabilityBar";
 import CategoryChart from "@/components/CategoryChart";
-import { calcProbability, calcPayout, formatCurrency, hasLiquidity } from "@/lib/market-math";
+import { calcCategoryProbabilities, calcCategoryPayout, formatCurrency } from "@/lib/market-math";
 import { useToast } from "@/components/Toast";
 
 interface Market {
@@ -184,56 +184,65 @@ export default function CategoryPage() {
       <CategoryChart markets={markets} />
 
       {/* Candidate markets */}
-      <div className="space-y-4">
-        {markets.map((market) => {
-          const prob = calcProbability(market.yes_pool, market.no_pool);
-          const totalPool = market.yes_pool + market.no_pool;
-          const defaultProb = 100 / markets.length;
+      {(() => {
+        const categoryProbs = calcCategoryProbabilities(markets);
+        const anyBets = markets.some((m) => m.yes_pool + m.no_pool > 0);
 
-          return (
-            <Card key={market.id} className="p-5">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <h3 className="font-semibold text-lg">{market.candidate}</h3>
-                  <span className="text-xs font-mono text-charcoal/40">
-                    Pool: {formatCurrency(totalPool)}
-                  </span>
-                </div>
-                {market.resolved && (
-                  <span
-                    className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-bold ${
-                      market.outcome
-                        ? "bg-yes-light text-yes"
-                        : "bg-no-light text-no"
-                    }`}
-                  >
-                    {market.outcome ? "YES" : "NO"}
-                  </span>
-                )}
-              </div>
+        return (
+          <div className="space-y-4">
+            {markets.map((market) => {
+              const prob = categoryProbs.get(market.id) ?? (100 / markets.length);
+              const totalPool = market.yes_pool + market.no_pool;
 
-              <ProbabilityBar probability={prob} defaultProb={defaultProb} />
+              return (
+                <Card key={market.id} className="p-5">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h3 className="font-semibold text-lg">{market.candidate}</h3>
+                      <span className="text-xs font-mono text-charcoal/40">
+                        Pool: {formatCurrency(totalPool)}
+                      </span>
+                    </div>
+                    {market.resolved && (
+                      <span
+                        className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-bold ${
+                          market.outcome
+                            ? "bg-yes-light text-yes"
+                            : "bg-no-light text-no"
+                        }`}
+                      >
+                        {market.outcome ? "YES" : "NO"}
+                      </span>
+                    )}
+                  </div>
 
-              {!market.resolved && (
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={() => openBet(market, "YES")}
-                    className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-yes/10 text-yes hover:bg-yes/20 transition-colors"
-                  >
-                    {prob >= 0 ? `Yes ${Math.round(prob)}¢` : "Yes"}
-                  </button>
-                  <button
-                    onClick={() => openBet(market, "NO")}
-                    className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-no/10 text-no hover:bg-no/20 transition-colors"
-                  >
-                    {prob >= 0 ? `No ${Math.round(100 - prob)}¢` : "No"}
-                  </button>
-                </div>
-              )}
-            </Card>
-          );
-        })}
-      </div>
+                  <ProbabilityBar
+                    probability={anyBets ? prob : -1}
+                    defaultProb={100 / markets.length}
+                  />
+
+                  {!market.resolved && (
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={() => openBet(market, "YES")}
+                        className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-yes/10 text-yes hover:bg-yes/20 transition-colors"
+                      >
+                        {anyBets ? `Yes ${Math.round(prob)}¢` : "Yes"}
+                      </button>
+                      <button
+                        onClick={() => openBet(market, "NO")}
+                        className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-no/10 text-no hover:bg-no/20 transition-colors"
+                      >
+                        {anyBets ? `No ${Math.round(100 - prob)}¢` : "No"}
+                      </button>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Bet modal */}
       {betModal && (
@@ -286,21 +295,20 @@ export default function CategoryPage() {
               </span>
             </div>
 
-            {parseFloat(betAmount) > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-charcoal/50">Potential payout</span>
-                <span className="font-mono font-semibold text-yes">
-                  {formatCurrency(
-                    calcPayout(
-                      betModal.side,
-                      parseFloat(betAmount),
-                      betModal.market.yes_pool,
-                      betModal.market.no_pool
-                    )
-                  )}
-                </span>
-              </div>
-            )}
+            {parseFloat(betAmount) > 0 && (() => {
+              const categoryProbs = calcCategoryProbabilities(markets);
+              const prob = categoryProbs.get(betModal.market.id) ?? (100 / markets.length);
+              return (
+                <div className="flex justify-between text-sm">
+                  <span className="text-charcoal/50">Potential payout</span>
+                  <span className="font-mono font-semibold text-yes">
+                    {formatCurrency(
+                      calcCategoryPayout(betModal.side, parseFloat(betAmount), prob)
+                    )}
+                  </span>
+                </div>
+              );
+            })()}
 
             <div className="flex gap-2">
               <Button

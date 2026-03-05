@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Button from "./ui/Button";
 import Input from "./ui/Input";
-import { calcPayout, formatCurrency } from "@/lib/market-math";
+import { calcPayout, calcCategoryPayout, formatCurrency } from "@/lib/market-math";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "./Toast";
 
@@ -17,9 +17,11 @@ interface BetSlipProps {
   };
   userBalance: number;
   onBetPlaced: () => void;
+  /** Category-normalized probability (0-100). When provided, uses category payout math. */
+  normalizedProb?: number;
 }
 
-export default function BetSlip({ market, userBalance, onBetPlaced }: BetSlipProps) {
+export default function BetSlip({ market, userBalance, onBetPlaced, normalizedProb }: BetSlipProps) {
   const [side, setSide] = useState<"YES" | "NO">("YES");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,12 +29,9 @@ export default function BetSlip({ market, userBalance, onBetPlaced }: BetSlipPro
   const supabase = createClient();
 
   const amountNum = parseFloat(amount) || 0;
-  const potentialPayout = calcPayout(
-    side,
-    amountNum,
-    market.yes_pool,
-    market.no_pool
-  );
+  const potentialPayout = normalizedProb !== undefined
+    ? calcCategoryPayout(side, amountNum, normalizedProb)
+    : calcPayout(side, amountNum, market.yes_pool, market.no_pool);
 
   const placeBet = async () => {
     if (amountNum <= 0) {

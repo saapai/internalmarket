@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { calcCategoryProbabilities } from "@/lib/market-math";
 
 const COLORS = [
   "#22c55e", // green
@@ -55,43 +56,47 @@ export default function CategoryChart({ markets, refreshKey }: CategoryChartProp
       // carry forward the latest probability for each market
       const allEvents: HistoryRow[] = data || [];
 
-      // Track running state for each market
-      const currentState = new Map<string, number>();
-      const defaultProb = 100 / markets.length; // 33% for 3, 25% for 4, etc.
-      markets.forEach((m) => currentState.set(m.id, defaultProb));
+      // Track running pool state for each market
+      const currentPools = new Map<string, { yes: number; no: number }>();
+      markets.forEach((m) => currentPools.set(m.id, { yes: 0, no: 0 }));
+
+      // Use shared normalization logic
+      const normalize = (pools: Map<string, { yes: number; no: number }>): Map<string, number> => {
+        const marketLikes = markets.map((m) => ({
+          id: m.id,
+          yes_pool: pools.get(m.id)?.yes ?? 0,
+          no_pool: pools.get(m.id)?.no ?? 0,
+        }));
+        return calcCategoryProbabilities(marketLikes);
+      };
 
       const points: DataPoint[] = [];
 
-      // Add initial point (all at 50%)
+      // Add initial point (all equal)
       const startTime = allEvents.length > 0
         ? new Date(allEvents[0].created_at).getTime() - 1000
         : Date.now() - 60000;
       points.push({
         time: startTime,
-        probabilities: new Map(currentState),
+        probabilities: normalize(currentPools),
       });
 
-      // Process each event
+      // Process each event — update both yes and no pools, then normalize
       allEvents.forEach((ev) => {
-        const total = ev.yes_pool + ev.no_pool;
-        const prob = total > 0 ? (ev.yes_pool / total) * 100 : (100 / markets.length);
-        currentState.set(ev.market_id, prob);
-
+        currentPools.set(ev.market_id, { yes: ev.yes_pool, no: ev.no_pool });
         points.push({
           time: new Date(ev.created_at).getTime(),
-          probabilities: new Map(currentState),
+          probabilities: normalize(currentPools),
         });
       });
 
       // Add current state as final point
       markets.forEach((m) => {
-        const total = m.yes_pool + m.no_pool;
-        const prob = total > 0 ? (m.yes_pool / total) * 100 : (100 / markets.length);
-        currentState.set(m.id, prob);
+        currentPools.set(m.id, { yes: m.yes_pool, no: m.no_pool });
       });
       points.push({
         time: Date.now(),
-        probabilities: new Map(currentState),
+        probabilities: normalize(currentPools),
       });
 
       setTimeline(points);
@@ -160,9 +165,10 @@ export default function CategoryChart({ markets, refreshKey }: CategoryChartProp
     <div className="w-full bg-white rounded-xl border border-black/5 shadow-sm p-4">
       {/* Legend */}
       <div className="flex flex-wrap gap-3 mb-3">
-        {markets.map((m, i) => {
-          const total = m.yes_pool + m.no_pool;
-          const prob = total > 0 ? (m.yes_pool / total) * 100 : (100 / markets.length);
+        {(() => {
+          const categoryProbs = calcCategoryProbabilities(markets);
+          return markets.map((m, i) => {
+          const prob = categoryProbs.get(m.id) ?? (100 / markets.length);
           return (
             <div key={m.id} className="flex items-center gap-1.5">
               <div
@@ -180,7 +186,8 @@ export default function CategoryChart({ markets, refreshKey }: CategoryChartProp
               </span>
             </div>
           );
-        })}
+        });
+        })()}
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 160 }}>

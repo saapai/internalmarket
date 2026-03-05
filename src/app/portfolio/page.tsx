@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Card from "@/components/ui/Card";
-import { formatCurrency, calcProbability, calcPayout } from "@/lib/market-math";
+import Button from "@/components/ui/Button";
+import { formatCurrency, calcCategoryProbabilities, calcCategoryMultiplier } from "@/lib/market-math";
+import { useToast } from "@/components/Toast";
 
 interface Bet {
   id: string;
@@ -18,6 +20,7 @@ interface Bet {
     no_pool: number;
     resolved: boolean;
     outcome: boolean | null;
+    category_id: string;
     category: { title: string } | null;
   };
 }
@@ -34,9 +37,12 @@ export default function PortfolioPage() {
   const [balance, setBalance] = useState(0);
   const [bets, setBets] = useState<Bet[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categoryMarkets, setCategoryMarkets] = useState<Map<string, { id: string; yes_pool: number; no_pool: number }[]>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [cashingOut, setCashingOut] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,8 +68,28 @@ export default function PortfolioPage() {
       ]);
 
       if (profileRes.data) setBalance(profileRes.data.balance);
-      if (betsRes.data) setBets(betsRes.data as unknown as Bet[]);
+      const fetchedBets = (betsRes.data as unknown as Bet[]) || [];
+      setBets(fetchedBets);
       if (txRes.data) setTransactions(txRes.data);
+
+      // Fetch sibling markets for each category to compute normalized probabilities
+      const categoryIds = Array.from(new Set(fetchedBets.map((b) => b.market.category_id).filter(Boolean)));
+      if (categoryIds.length > 0) {
+        const { data: allMarkets } = await supabase
+          .from("markets")
+          .select("id, yes_pool, no_pool, category_id")
+          .in("category_id", categoryIds);
+        if (allMarkets) {
+          const grouped = new Map<string, { id: string; yes_pool: number; no_pool: number }[]>();
+          allMarkets.forEach((m: { id: string; yes_pool: number; no_pool: number; category_id: string }) => {
+            const list = grouped.get(m.category_id) || [];
+            list.push(m);
+            grouped.set(m.category_id, list);
+          });
+          setCategoryMarkets(grouped);
+        }
+      }
+
       setLoading(false);
     };
 
@@ -82,6 +108,67 @@ export default function PortfolioPage() {
 
   const activeBets = bets.filter((b) => !b.market.resolved);
   const resolvedBets = bets.filter((b) => b.market.resolved);
+
+  const handleCashout = async (betId: string) => {
+    setCashingOut(betId);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase.rpc("cashout_bet", {
+        p_user_id: user.id,
+        p_bet_id: betId,
+      });
+
+      if (error) throw error;
+      const result = data as { error?: string; success?: boolean; refund?: number };
+      if (result.error) {
+        toast(result.error, "error");
+      } else {
+        toast(`Cashed out ${formatCurrency(result.refund || 0)}`, "success");
+        // Refresh data
+        const [profileRes, betsRes, txRes] = await Promise.all([
+          supabase.from("profiles").select("balance").eq("id", user.id).single(),
+          supabase
+            .from("bets")
+            .select("*, market:markets(*, category:categories(title))")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("transactions")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(50),
+        ]);
+        if (profileRes.data) setBalance(profileRes.data.balance);
+        const refreshedBets = (betsRes.data as unknown as Bet[]) || [];
+        setBets(refreshedBets);
+        if (txRes.data) setTransactions(txRes.data);
+        // Re-fetch category markets for updated pools
+        const catIds = Array.from(new Set(refreshedBets.map((b) => b.market.category_id).filter(Boolean)));
+        if (catIds.length > 0) {
+          const { data: allMarkets } = await supabase
+            .from("markets")
+            .select("id, yes_pool, no_pool, category_id")
+            .in("category_id", catIds);
+          if (allMarkets) {
+            const grouped = new Map<string, { id: string; yes_pool: number; no_pool: number }[]>();
+            allMarkets.forEach((m: { id: string; yes_pool: number; no_pool: number; category_id: string }) => {
+              const list = grouped.get(m.category_id) || [];
+              list.push(m);
+              grouped.set(m.category_id, list);
+            });
+            setCategoryMarkets(grouped);
+          }
+        }
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to cashout", "error");
+    } finally {
+      setCashingOut(null);
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -128,27 +215,23 @@ export default function PortfolioPage() {
         ) : (
           <div className="space-y-3">
             {activeBets.map((bet) => {
-              const payout = calcPayout(
-                bet.side as "YES" | "NO",
-                0,
-                bet.market.yes_pool,
-                bet.market.no_pool
-              );
-              const multiplier =
-                bet.market.yes_pool + bet.market.no_pool > 0
-                  ? (bet.market.yes_pool + bet.market.no_pool) /
-                    (bet.side === "YES"
-                      ? bet.market.yes_pool
-                      : bet.market.no_pool)
-                  : 2;
+              const siblings = categoryMarkets.get(bet.market.category_id) || [bet.market];
+              const probs = calcCategoryProbabilities(siblings);
+              const prob = probs.get(bet.market.id) ?? (100 / siblings.length);
+              const anyBets = siblings.some((m) => m.yes_pool + m.no_pool > 0);
+              const multiplier = anyBets
+                ? calcCategoryMultiplier(bet.side as "YES" | "NO", prob)
+                : 0;
 
               return (
                 <div
                   key={bet.id}
-                  className="flex items-center justify-between py-3 border-b border-charcoal/5 last:border-0 cursor-pointer hover:bg-charcoal/[0.02] -mx-2 px-2 rounded"
-                  onClick={() => router.push(`/market/${bet.market.id}`)}
+                  className="flex items-center justify-between py-3 border-b border-charcoal/5 last:border-0 -mx-2 px-2 rounded"
                 >
-                  <div>
+                  <div
+                    className="flex-1 cursor-pointer hover:bg-charcoal/[0.02] rounded"
+                    onClick={() => router.push(`/market/${bet.market.id}`)}
+                  >
                     <div className="flex items-center gap-2">
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-bold ${
@@ -167,13 +250,25 @@ export default function PortfolioPage() {
                       {bet.market.category?.title}
                     </span>
                   </div>
-                  <div className="text-right">
-                    <div className="font-mono text-sm font-semibold">
-                      {formatCurrency(bet.amount)}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="font-mono text-sm font-semibold">
+                        {formatCurrency(bet.amount)}
+                      </div>
+                      <div className="text-xs text-charcoal/40 font-mono">
+                        {multiplier > 0 ? `${multiplier.toFixed(2)}x` : "—"}
+                      </div>
                     </div>
-                    <div className="text-xs text-charcoal/40 font-mono">
-                      {multiplier.toFixed(2)}x
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCashout(bet.id);
+                      }}
+                      disabled={cashingOut === bet.id}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-charcoal/5 text-charcoal/60 hover:bg-charcoal/10 hover:text-charcoal transition-colors disabled:opacity-50"
+                    >
+                      {cashingOut === bet.id ? "..." : "Cashout"}
+                    </button>
                   </div>
                 </div>
               );
