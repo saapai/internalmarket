@@ -1,124 +1,32 @@
 /**
  * Seed data for all 26 SEP Winter Formal superlative categories.
- * Each category has 3 candidate markets (YES/NO).
+ * From the actual Google Form voting.
  */
 export const CATEGORIES = [
-  {
-    title: "Indian of the Year",
-    candidates: ["Yashas", "Arjun", "Priya"],
-  },
-  {
-    title: "Most Likely to Become a CEO",
-    candidates: ["Rahul", "Sneha", "Vikram"],
-  },
-  {
-    title: "Life of the Party",
-    candidates: ["DJ Karan", "Meera", "Aditya"],
-  },
-  {
-    title: "Best Dressed",
-    candidates: ["Ananya", "Rohan", "Ishita"],
-  },
-  {
-    title: "Most Likely to Go Viral",
-    candidates: ["Nikhil", "Kavya", "Siddharth"],
-  },
-  {
-    title: "Cutest Couple",
-    candidates: ["Riya & Aman", "Neha & Dev", "Pooja & Raj"],
-  },
-  {
-    title: "Most Athletic",
-    candidates: ["Kabir", "Tanya", "Harsh"],
-  },
-  {
-    title: "Class Clown",
-    candidates: ["Varun", "Diya", "Pranav"],
-  },
-  {
-    title: "Most Likely to Win a Nobel Prize",
-    candidates: ["Shreya", "Arnav", "Ritika"],
-  },
-  {
-    title: "Best Hair",
-    candidates: ["Saanvi", "Dhruv", "Aarav"],
-  },
-  {
-    title: "Most Likely to Travel the World",
-    candidates: ["Simran", "Kunal", "Aisha"],
-  },
-  {
-    title: "Best Smile",
-    candidates: ["Navya", "Ayaan", "Zara"],
-  },
-  {
-    title: "Most Likely to Be Famous",
-    candidates: ["Vihaan", "Kiara", "Reyansh"],
-  },
-  {
-    title: "Biggest Foodie",
-    candidates: ["Manav", "Myra", "Aryan"],
-  },
-  {
-    title: "Best Dance Moves",
-    candidates: ["Anvi", "Shaurya", "Sara"],
-  },
-  {
-    title: "Most Likely to Write a Book",
-    candidates: ["Ira", "Advait", "Nisha"],
-  },
-  {
-    title: "Best Sense of Humor",
-    candidates: ["Kabir M", "Aanya", "Om"],
-  },
-  {
-    title: "Most Studious",
-    candidates: ["Vivaan", "Samaira", "Atharv"],
-  },
-  {
-    title: "Best Glow Up",
-    candidates: ["Aditi", "Krishna", "Pari"],
-  },
-  {
-    title: "Most Likely to Be a Billionaire",
-    candidates: ["Rudra", "Anaya", "Laksh"],
-  },
-  {
-    title: "Best Vocalist",
-    candidates: ["Sia", "Aadi", "Trisha"],
-  },
-  {
-    title: "Most Photogenic",
-    candidates: ["Mira", "Yash", "Aadhya"],
-  },
-  {
-    title: "Best Duo / Friendship",
-    candidates: ["Rishi & Neil", "Tara & Maya", "Jay & Krish"],
-  },
-  {
-    title: "Most Likely to Be on Shark Tank",
-    candidates: ["Sanya", "Ishan", "Pihu"],
-  },
-  {
-    title: "Biggest Flirt",
-    candidates: ["Ahaan", "Kyra", "Rehan"],
-  },
-  {
-    title: "Most School Spirit",
-    candidates: ["Veer", "Avni", "Aarav K"],
-  },
+  { title: "Indian of the Year", candidates: ["Yashas", "Anish", "Henry"] },
+  { title: "Biggest Alcoholic", candidates: ["Kera", "Henry", "Armaan"] },
+  { title: "Asian of the Year", candidates: ["Ming", "Elise", "Jonathan"] },
+  { title: "Best Pledge Class", candidates: ["Alpha Epsilon", "Alpha Zeta", "Alpha Delta"] },
+  { title: "Most Likely to Blackout", candidates: ["Elijah", "Armaan", "Dilnar"] },
+  { title: "White Boy of the Year", candidates: ["Quinn", "Evan", "Tyler"] },
+  { title: "Best Big Little", candidates: ["Sophie Sharan / Maddie", "Mahi + Ani", "Evan + Armaan"] },
+  { title: "Best Pseudo Big Little", candidates: ["Sophie + Kera", "Natalie + Matthew", "Allie + Barima"] },
+  { title: "Best Shoulders to Cry On", candidates: ["Sam", "Armaan", "Elijah"] },
+  { title: "Best Shoulders", candidates: ["Sharan", "Ani", "Ming"] },
+  { title: "Biggest Back", candidates: ["Sharan", "Ani", "Ming"] },
+  { title: "Biggest Big Back", candidates: ["Dilnar", "Kera", "Ming"] },
+  { title: "Best Dressed", candidates: ["Sophie", "Elise", "Ruhaan"] },
+  { title: "Fratcest", candidates: ["Kera", "Armaan"] },
+  { title: "Best Romance", candidates: ["Glizzy + Layla", "Armaan + Anannya"] },
+  { title: "Best Bromance", candidates: ["Tyler + Henry", "Henry + Matthew", "Ani + Quinn"] },
+  { title: "Best Gal Pals", candidates: ["Fiona + Kera", "Kera + Maddie", "Abby + Sidney"] },
+  { title: "Best Trio", candidates: ["Franco + Anish + Quinn", "Rahul + Natalie + Saathvik"] },
+  { title: "Most Performative", candidates: ["Ash", "Yashas"] },
+  { title: "Most Likely to Solve World Peace", candidates: ["Sonali", "Lindsey", "Joseph"] },
+  { title: "Best Aux", candidates: ["Yashas", "Sophie", "Joseph"] },
+  { title: "SEP MVP", candidates: ["Ash", "Sophie", "Mahi"] },
+  { title: '"Founder" in Bio After Making GPT Wrapper', candidates: ["Yashas", "Brandon"] },
+  { title: "Funniest Active", candidates: ["Joanna", "Sam", "Layla", "Anish"] },
+  { title: "Biggest Pick Me", candidates: ["Tyler", "Ash"] },
+  { title: "Most Brain Rot", candidates: ["Kera", "Dilnar", "Joanna"] },
 ];
-
-/**
- * Generate SQL insert statements for seeding
- */
-export function generateSeedSQL(): string {
-  const lines: string[] = [];
-  CATEGORIES.forEach((cat, i) => {
-    const catId = `cat_${i + 1}`;
-    lines.push(
-      `INSERT INTO categories (id, title, sort_order) VALUES (uuid_generate_v4(), '${cat.title.replace(/'/g, "''")}', ${i + 1});`
-    );
-  });
-  return lines.join("\n");
-}
