@@ -54,7 +54,8 @@ export default function LeaderboardPage() {
           balance: p.balance,
           total_bets: betStats.get(p.id)?.count || 0,
           total_wagered: betStats.get(p.id)?.total || 0,
-        }));
+        }))
+        .sort((a, b) => (b.balance + b.total_wagered) - (a.balance + a.total_wagered));
 
       setEntries(leaderboard);
       setLoading(false);
@@ -114,13 +115,16 @@ export default function LeaderboardPage() {
                     </div>
                   </div>
                 </div>
-                <div className="font-mono font-bold text-right">
+                <div className="font-mono text-right">
                   <div
-                    className={
-                      entry.balance > 0 ? "text-yes" : "text-charcoal/50"
-                    }
+                    className={`font-bold ${
+                      entry.balance + entry.total_wagered > 0 ? "text-yes" : "text-charcoal/50"
+                    }`}
                   >
-                    {formatCurrency(entry.balance)}
+                    {formatCurrency(entry.balance + entry.total_wagered)}
+                  </div>
+                  <div className="text-[10px] text-charcoal/40">
+                    {formatCurrency(entry.balance)} + {formatCurrency(entry.total_wagered)} in bets
                   </div>
                 </div>
               </div>
