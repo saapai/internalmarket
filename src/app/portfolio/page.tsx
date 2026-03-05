@@ -110,7 +110,7 @@ export default function PortfolioPage() {
         <div className="mt-4 p-3 bg-cream rounded-lg border border-charcoal/5">
           <p className="text-xs text-charcoal/50 font-mono">
             <span className="text-charcoal/70 font-semibold">$ deposit</span>{" "}
-            Venmo @SEP-Market or CashApp $SEPMarket
+            Venmo @saathvikpai or Zelle 3853687238
           </p>
           <p className="text-xs text-charcoal/40 mt-1">
             Include your phone number in the note. Admin will credit your balance.

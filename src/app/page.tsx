@@ -1,23 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import MarketCard from "@/components/MarketCard";
-import CategoryFilter from "@/components/CategoryFilter";
-import Input from "@/components/ui/Input";
-import { useToast } from "@/components/Toast";
 import { useRouter } from "next/navigation";
-
-interface Market {
-  id: string;
-  candidate: string;
-  yes_pool: number;
-  no_pool: number;
-  resolved: boolean;
-  outcome: boolean | null;
-  category_id: string;
-  category: { title: string } | null;
-}
+import { createClient } from "@/lib/supabase/client";
+import Card from "@/components/ui/Card";
+import Input from "@/components/ui/Input";
 
 interface Category {
   id: string;
@@ -25,63 +12,54 @@ interface Category {
   sort_order: number;
 }
 
+interface MarketSummary {
+  category_id: string;
+  count: number;
+  total_pool: number;
+}
+
 export default function HomePage() {
-  const [markets, setMarkets] = useState<Market[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [marketStats, setMarketStats] = useState<Map<string, MarketSummary>>(new Map());
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
-  const { toast } = useToast();
   const router = useRouter();
 
-  const fetchData = async () => {
-    const [marketsRes, catsRes] = await Promise.all([
-      supabase
-        .from("markets")
-        .select("*, category:categories(title)")
-        .order("created_at"),
-      supabase.from("categories").select("*").order("sort_order"),
-    ]);
-
-    if (marketsRes.data) setMarkets(marketsRes.data as unknown as Market[]);
-    if (catsRes.data) setCategories(catsRes.data);
-    setLoading(false);
-  };
-
   useEffect(() => {
-    fetchData();
+    const fetchData = async () => {
+      const [catsRes, marketsRes] = await Promise.all([
+        supabase.from("categories").select("*").order("sort_order"),
+        supabase.from("markets").select("id, category_id, yes_pool, no_pool"),
+      ]);
 
-    // Subscribe to realtime updates on markets
-    const channel = supabase
-      .channel("markets-realtime")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "markets" },
-        () => fetchData()
-      )
-      .subscribe();
+      if (catsRes.data) setCategories(catsRes.data);
 
-    return () => {
-      supabase.removeChannel(channel);
+      if (marketsRes.data) {
+        const stats = new Map<string, MarketSummary>();
+        marketsRes.data.forEach((m) => {
+          const existing = stats.get(m.category_id) || {
+            category_id: m.category_id,
+            count: 0,
+            total_pool: 0,
+          };
+          existing.count++;
+          existing.total_pool += (m.yes_pool || 0) + (m.no_pool || 0);
+          stats.set(m.category_id, existing);
+        });
+        setMarketStats(stats);
+      }
+
+      setLoading(false);
     };
+
+    fetchData();
   }, []);
 
-  const filtered = markets.filter((m) => {
-    if (selectedCategory && m.category_id !== selectedCategory) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        m.candidate.toLowerCase().includes(q) ||
-        (m.category?.title || "").toLowerCase().includes(q)
-      );
-    }
-    return true;
+  const filtered = categories.filter((c) => {
+    if (!search) return true;
+    return c.title.toLowerCase().includes(search.toLowerCase());
   });
-
-  const handleQuickBet = (marketId: string) => {
-    router.push(`/market/${marketId}`);
-  };
 
   if (loading) {
     return (
@@ -107,36 +85,46 @@ export default function HomePage() {
 
       {/* Search */}
       <Input
-        placeholder="Search markets..."
+        placeholder="Search categories..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="max-w-md mx-auto"
       />
 
-      {/* Category filters */}
-      <CategoryFilter
-        categories={categories}
-        selected={selectedCategory}
-        onSelect={setSelectedCategory}
-      />
-
-      {/* Market grid */}
+      {/* Category grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-charcoal/40 font-mono text-sm">
-          No markets found
+          No categories found
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((market) => (
-            <MarketCard
-              key={market.id}
-              market={{
-                ...market,
-                category: market.category || undefined,
-              }}
-              onQuickBet={handleQuickBet}
-            />
-          ))}
+          {filtered.map((cat) => {
+            const stats = marketStats.get(cat.id);
+            return (
+              <Card
+                key={cat.id}
+                hover
+                className="p-5 flex flex-col gap-2"
+                onClick={() => router.push(`/category/${cat.id}`)}
+              >
+                <h3 className="font-semibold text-charcoal text-lg leading-tight">
+                  {cat.title}
+                </h3>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs font-mono text-charcoal/40">
+                    {stats?.count || 0} candidates
+                  </span>
+                  <span className="text-xs font-mono text-charcoal/40">
+                    Pool: ${(stats?.total_pool || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-xs text-charcoal/30">Tap to vote</span>
+                  <span className="text-charcoal/30">&rarr;</span>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

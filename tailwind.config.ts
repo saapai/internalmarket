@@ -27,6 +27,15 @@ const config: Config = {
       backgroundSize: {
         dots: "24px 24px",
       },
+      animation: {
+        marquee: "marquee 20s linear infinite",
+      },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0%)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+      },
     },
   },
   plugins: [],
