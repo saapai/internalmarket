@@ -7,7 +7,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import ProbabilityBar from "@/components/ProbabilityBar";
-import ProbabilityChart from "@/components/ProbabilityChart";
+import CategoryChart from "@/components/CategoryChart";
 import { calcProbability, calcPayout, formatCurrency } from "@/lib/market-math";
 import { useToast } from "@/components/Toast";
 
@@ -180,6 +180,9 @@ export default function CategoryPage() {
         </div>
       )}
 
+      {/* Combined probability chart */}
+      <CategoryChart markets={markets} />
+
       {/* Candidate markets */}
       <div className="space-y-4">
         {markets.map((market) => {
@@ -209,12 +212,6 @@ export default function CategoryPage() {
               </div>
 
               <ProbabilityBar probability={prob} />
-
-              <ProbabilityChart
-                marketId={market.id}
-                currentYesPool={market.yes_pool}
-                currentNoPool={market.no_pool}
-              />
 
               {!market.resolved && (
                 <div className="flex gap-2 mt-4">
