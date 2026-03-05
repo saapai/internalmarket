@@ -14,28 +14,24 @@ type Step = "phone" | "otp" | "name";
  * Normalize any US phone input to E.164 format: +1XXXXXXXXXX
  * Handles: +1 (385) 368-7238, 1-385-368-7238, (385) 368-7238,
  * 3853687238, +13853687238, 1 385 368 7238, etc.
+ * Returns null if the number is invalid.
  */
-function normalizePhone(raw: string): string {
-  // Strip everything except digits and leading +
+function normalizePhone(raw: string): string | null {
+  // Strip everything except digits
   const digits = raw.replace(/[^\d]/g, "");
 
-  // If it starts with 1 and has 11 digits, it already has country code
+  // 11 digits starting with 1 → already has US country code
   if (digits.length === 11 && digits.startsWith("1")) {
     return `+${digits}`;
   }
 
-  // If it's 10 digits, add +1
+  // 10 digits → add +1
   if (digits.length === 10) {
     return `+1${digits}`;
   }
 
-  // If they typed +1 already and we stripped it, just use the digits
-  if (digits.length > 10 && digits.startsWith("1")) {
-    return `+${digits}`;
-  }
-
-  // Fallback: prepend +1 and hope for the best
-  return `+1${digits}`;
+  // Anything else is not a valid US number
+  return null;
 }
 
 export default function LoginPage() {
@@ -50,22 +46,27 @@ export default function LoginPage() {
 
   const sendOtp = async () => {
     if (!phone) return;
-    setLoading(true);
     const formatted = normalizePhone(phone);
+    if (!formatted) {
+      toast("Enter a valid 10-digit US phone number", "error");
+      return;
+    }
+    setLoading(true);
     const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
     setLoading(false);
     if (error) {
       toast(error.message, "error");
     } else {
-      toast("OTP sent", "info");
+      toast("OTP sent to " + formatted, "info");
       setStep("otp");
     }
   };
 
   const verifyOtp = async () => {
     if (!otp) return;
-    setLoading(true);
     const formatted = normalizePhone(phone);
+    if (!formatted) return;
+    setLoading(true);
     const { data, error } = await supabase.auth.verifyOtp({
       phone: formatted,
       token: otp,
@@ -130,11 +131,14 @@ export default function LoginPage() {
           <div className="space-y-4">
             <Input
               type="tel"
-              placeholder="+1 (555) 123-4567"
+              placeholder="(555) 123-4567"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendOtp()}
             />
+            <p className="text-xs text-charcoal/40 -mt-2">
+              10-digit US number — any format works
+            </p>
             <Button
               className="w-full"
               onClick={sendOtp}
