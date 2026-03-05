@@ -157,13 +157,17 @@ export default function MarketPage() {
               <div className="text-center">
                 <div className="text-xs text-charcoal/40 mb-1">YES Multiplier</div>
                 <div className="font-mono font-bold text-lg text-yes">
-                  {calcMultiplier("YES", market.yes_pool, market.no_pool).toFixed(2)}x
+                  {totalPool > 0
+                    ? `${calcMultiplier("YES", market.yes_pool, market.no_pool).toFixed(2)}x`
+                    : "—"}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-xs text-charcoal/40 mb-1">NO Multiplier</div>
                 <div className="font-mono font-bold text-lg text-no">
-                  {calcMultiplier("NO", market.yes_pool, market.no_pool).toFixed(2)}x
+                  {totalPool > 0
+                    ? `${calcMultiplier("NO", market.yes_pool, market.no_pool).toFixed(2)}x`
+                    : "—"}
                 </div>
               </div>
             </div>

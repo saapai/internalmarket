@@ -4,8 +4,12 @@
 
 export function calcProbability(yesPool: number, noPool: number): number {
   const total = yesPool + noPool;
-  if (total === 0) return 50;
+  if (total === 0) return -1; // -1 signals "no bets yet"
   return (yesPool / total) * 100;
+}
+
+export function hasLiquidity(yesPool: number, noPool: number): boolean {
+  return yesPool + noPool > 0;
 }
 
 export function calcPayout(
@@ -27,9 +31,9 @@ export function calcMultiplier(
   noPool: number
 ): number {
   const total = yesPool + noPool;
-  if (total === 0) return 2;
+  if (total === 0) return 0; // no liquidity — show "—"
   const winningPool = side === "YES" ? yesPool : noPool;
-  if (winningPool === 0) return total + 1; // first bet
+  if (winningPool === 0) return total + 1;
   return total / winningPool;
 }
 
@@ -38,5 +42,6 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatPercent(value: number): string {
+  if (value < 0) return "—";
   return `${Math.round(value)}%`;
 }

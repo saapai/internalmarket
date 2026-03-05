@@ -8,7 +8,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import ProbabilityBar from "@/components/ProbabilityBar";
 import CategoryChart from "@/components/CategoryChart";
-import { calcProbability, calcPayout, formatCurrency } from "@/lib/market-math";
+import { calcProbability, calcPayout, formatCurrency, hasLiquidity } from "@/lib/market-math";
 import { useToast } from "@/components/Toast";
 
 interface Market {
@@ -219,13 +219,13 @@ export default function CategoryPage() {
                     onClick={() => openBet(market, "YES")}
                     className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-yes/10 text-yes hover:bg-yes/20 transition-colors"
                   >
-                    Yes {Math.round(prob)}¢
+                    {prob >= 0 ? `Yes ${Math.round(prob)}¢` : "Yes"}
                   </button>
                   <button
                     onClick={() => openBet(market, "NO")}
                     className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-no/10 text-no hover:bg-no/20 transition-colors"
                   >
-                    No {Math.round(100 - prob)}¢
+                    {prob >= 0 ? `No ${Math.round(100 - prob)}¢` : "No"}
                   </button>
                 </div>
               )}

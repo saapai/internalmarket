@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/market-math";
+import AddBalanceButton from "./AddBalanceButton";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -66,6 +67,7 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {user ? (
             <>
+              <AddBalanceButton />
               <span className="font-mono text-sm font-semibold text-yes">
                 {formatCurrency(user.balance)}
               </span>

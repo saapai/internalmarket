@@ -6,7 +6,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { useToast } from "@/components/Toast";
-import { formatCurrency, calcProbability } from "@/lib/market-math";
+import { formatCurrency, calcProbability, hasLiquidity } from "@/lib/market-math";
 
 const ADMIN_PASSKEY = "penis";
 
@@ -31,11 +31,11 @@ interface Market {
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [passkey, setPasskey] = useState("");
-  const [tab, setTab] = useState<"users" | "deposit" | "resolve">("users");
+  const [tab, setTab] = useState<"users" | "balance" | "resolve">("users");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [searchUser, setSearchUser] = useState("");
-  const [depositAmount, setDepositAmount] = useState("");
+  const [newBalance, setNewBalance] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
@@ -66,29 +66,43 @@ export default function AdminPage() {
     if (authenticated) fetchData();
   }, [authenticated]);
 
-  const creditBalance = async () => {
-    if (!selectedUser || !depositAmount) return;
+  // When user is selected, pre-fill with their current balance
+  useEffect(() => {
+    if (selectedUser) {
+      const user = users.find((u) => u.id === selectedUser);
+      if (user) setNewBalance(user.balance.toString());
+    } else {
+      setNewBalance("");
+    }
+  }, [selectedUser]);
+
+  const setBalance = async () => {
+    if (!selectedUser || newBalance === "") return;
     setLoading(true);
-    const amount = parseFloat(depositAmount);
+    const targetBalance = parseFloat(newBalance);
+    const user = users.find((u) => u.id === selectedUser)!;
+    const diff = targetBalance - user.balance;
 
     const { error } = await supabase
       .from("profiles")
-      .update({ balance: users.find((u) => u.id === selectedUser)!.balance + amount })
+      .update({ balance: targetBalance })
       .eq("id", selectedUser);
 
     if (!error) {
-      await supabase.from("transactions").insert({
-        user_id: selectedUser,
-        type: "deposit",
-        amount: amount,
-        description: `Admin deposit: $${amount.toFixed(2)}`,
-      });
-      toast(`Credited ${formatCurrency(amount)}`, "success");
-      setDepositAmount("");
+      if (diff !== 0) {
+        await supabase.from("transactions").insert({
+          user_id: selectedUser,
+          type: diff > 0 ? "deposit" : "withdrawal",
+          amount: diff,
+          description: `Admin set balance to $${targetBalance.toFixed(2)} (${diff > 0 ? "+" : ""}${diff.toFixed(2)})`,
+        });
+      }
+      toast(`Set ${user.display_name || "user"} balance to ${formatCurrency(targetBalance)}`, "success");
+      setNewBalance("");
       setSelectedUser(null);
       fetchData();
     } else {
-      toast("Failed to credit", "error");
+      toast("Failed to update balance", "error");
     }
     setLoading(false);
   };
@@ -148,13 +162,17 @@ export default function AdminPage() {
       (u.phone || "").includes(searchUser)
   );
 
+  const selectedUserData = selectedUser
+    ? users.find((u) => u.id === selectedUser)
+    : null;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold font-mono">ADMIN PANEL</h1>
 
       {/* Tabs */}
       <div className="flex gap-2">
-        {(["users", "deposit", "resolve"] as const).map((t) => (
+        {(["users", "balance", "resolve"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -218,10 +236,10 @@ export default function AdminPage() {
         </Card>
       )}
 
-      {/* Deposit tab */}
-      {tab === "deposit" && (
+      {/* Balance tab */}
+      {tab === "balance" && (
         <Card className="p-6 space-y-4">
-          <h2 className="font-semibold">Credit / Debit User Balance</h2>
+          <h2 className="font-semibold">Set User Balance</h2>
           <div>
             <label className="block text-xs text-charcoal/50 mb-1">
               Select User
@@ -234,28 +252,62 @@ export default function AdminPage() {
               <option value="">Choose user...</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.display_name || u.phone} — {formatCurrency(u.balance)}
+                  {u.display_name || u.phone} — current: {formatCurrency(u.balance)}
                 </option>
               ))}
             </select>
           </div>
+
+          {selectedUserData && (
+            <div className="p-3 bg-cream rounded-lg border border-charcoal/5">
+              <div className="flex justify-between text-sm">
+                <span className="text-charcoal/50">Current balance</span>
+                <span className="font-mono font-bold">
+                  {formatCurrency(selectedUserData.balance)}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs text-charcoal/50 mb-1">
-              Amount (negative to debit)
+              New Balance
             </label>
             <Input
               type="number"
               step="0.01"
-              placeholder="10.00"
-              value={depositAmount}
-              onChange={(e) => setDepositAmount(e.target.value)}
+              min="0"
+              placeholder="0.00"
+              value={newBalance}
+              onChange={(e) => setNewBalance(e.target.value)}
             />
           </div>
+
+          {selectedUserData && newBalance !== "" && (
+            <div className="p-3 bg-cream rounded-lg border border-charcoal/5">
+              <div className="flex justify-between text-sm">
+                <span className="text-charcoal/50">Change</span>
+                <span
+                  className={`font-mono font-bold ${
+                    parseFloat(newBalance) - selectedUserData.balance >= 0
+                      ? "text-yes"
+                      : "text-no"
+                  }`}
+                >
+                  {parseFloat(newBalance) - selectedUserData.balance >= 0 ? "+" : ""}
+                  {formatCurrency(
+                    parseFloat(newBalance) - selectedUserData.balance
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+
           <Button
-            onClick={creditBalance}
-            disabled={loading || !selectedUser || !depositAmount}
+            onClick={setBalance}
+            disabled={loading || !selectedUser || newBalance === ""}
           >
-            {loading ? "Processing..." : "Credit Balance"}
+            {loading ? "Updating..." : "Set Balance"}
           </Button>
         </Card>
       )}
@@ -270,6 +322,7 @@ export default function AdminPage() {
           ) : (
             markets.map((market) => {
               const prob = calcProbability(market.yes_pool, market.no_pool);
+              const liquid = hasLiquidity(market.yes_pool, market.no_pool);
               return (
                 <Card key={market.id} className="p-4">
                   <div className="flex items-center justify-between">
@@ -279,8 +332,9 @@ export default function AdminPage() {
                       </span>
                       <h3 className="font-semibold">{market.candidate}</h3>
                       <span className="text-xs font-mono text-charcoal/40">
-                        Pool: {formatCurrency(market.yes_pool + market.no_pool)}{" "}
-                        | YES: {Math.round(prob)}%
+                        {liquid
+                          ? `Pool: ${formatCurrency(market.yes_pool + market.no_pool)} | YES: ${Math.round(prob)}%`
+                          : "No bets yet"}
                       </span>
                     </div>
                     <div className="flex gap-2">
