@@ -57,7 +57,8 @@ export default function CategoryChart({ markets, refreshKey }: CategoryChartProp
 
       // Track running state for each market
       const currentState = new Map<string, number>();
-      markets.forEach((m) => currentState.set(m.id, 50)); // start at 50%
+      const defaultProb = 100 / markets.length; // 33% for 3, 25% for 4, etc.
+      markets.forEach((m) => currentState.set(m.id, defaultProb));
 
       const points: DataPoint[] = [];
 
@@ -73,7 +74,7 @@ export default function CategoryChart({ markets, refreshKey }: CategoryChartProp
       // Process each event
       allEvents.forEach((ev) => {
         const total = ev.yes_pool + ev.no_pool;
-        const prob = total > 0 ? (ev.yes_pool / total) * 100 : 50;
+        const prob = total > 0 ? (ev.yes_pool / total) * 100 : (100 / markets.length);
         currentState.set(ev.market_id, prob);
 
         points.push({
@@ -85,7 +86,7 @@ export default function CategoryChart({ markets, refreshKey }: CategoryChartProp
       // Add current state as final point
       markets.forEach((m) => {
         const total = m.yes_pool + m.no_pool;
-        const prob = total > 0 ? (m.yes_pool / total) * 100 : 50;
+        const prob = total > 0 ? (m.yes_pool / total) * 100 : (100 / markets.length);
         currentState.set(m.id, prob);
       });
       points.push({
@@ -161,7 +162,7 @@ export default function CategoryChart({ markets, refreshKey }: CategoryChartProp
       <div className="flex flex-wrap gap-3 mb-3">
         {markets.map((m, i) => {
           const total = m.yes_pool + m.no_pool;
-          const prob = total > 0 ? (m.yes_pool / total) * 100 : 50;
+          const prob = total > 0 ? (m.yes_pool / total) * 100 : (100 / markets.length);
           return (
             <div key={m.id} className="flex items-center gap-1.5">
               <div

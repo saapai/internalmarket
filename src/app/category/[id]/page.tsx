@@ -188,6 +188,7 @@ export default function CategoryPage() {
         {markets.map((market) => {
           const prob = calcProbability(market.yes_pool, market.no_pool);
           const totalPool = market.yes_pool + market.no_pool;
+          const defaultProb = 100 / markets.length;
 
           return (
             <Card key={market.id} className="p-5">
@@ -211,7 +212,7 @@ export default function CategoryPage() {
                 )}
               </div>
 
-              <ProbabilityBar probability={prob} />
+              <ProbabilityBar probability={prob} defaultProb={defaultProb} />
 
               {!market.resolved && (
                 <div className="flex gap-2 mt-4">
